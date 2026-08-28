@@ -3,17 +3,21 @@
 // beräkningen sker på servern (SSR) — inget extra klient-JS krävs för
 // själva filtreringen.
 
-export type RangeKey = "today" | "7d" | "month" | "last_month" | "custom";
+export type RangeKey = "today" | "7d" | "30d" | "month" | "last_month" | "custom";
 
 export const RANGE_LABELS: Record<RangeKey, string> = {
   today: "Idag",
   "7d": "Senaste 7 dagarna",
+  "30d": "Senaste 30 dagarna",
   month: "Denna månad",
   last_month: "Förra månaden",
   custom: "Eget intervall",
 };
 
-export const RANGE_ORDER: RangeKey[] = ["today", "7d", "month", "last_month", "custom"];
+// OBS: "30d" motsvarar Dropfans egen standardvy i deras Analytics-sida
+// (glidande 30-dagarsfönster) — bra att kunna välja när man vill jämföra
+// direkt mot en skärmdump därifrån.
+export const RANGE_ORDER: RangeKey[] = ["today", "7d", "30d", "month", "last_month", "custom"];
 
 function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -54,6 +58,7 @@ export function resolveDateRange(searchParams: {
   const key: RangeKey =
     rawKey === "today" ||
     rawKey === "7d" ||
+    rawKey === "30d" ||
     rawKey === "month" ||
     rawKey === "last_month" ||
     rawKey === "custom"
@@ -91,6 +96,13 @@ export function resolveDateRange(searchParams: {
     case "7d": {
       from = new Date(today);
       from.setDate(from.getDate() - 6); // inkl. idag = 7 dagar totalt
+      toExclusive = new Date(today);
+      toExclusive.setDate(toExclusive.getDate() + 1);
+      break;
+    }
+    case "30d": {
+      from = new Date(today);
+      from.setDate(from.getDate() - 29); // inkl. idag = 30 dagar totalt
       toExclusive = new Date(today);
       toExclusive.setDate(toExclusive.getDate() + 1);
       break;

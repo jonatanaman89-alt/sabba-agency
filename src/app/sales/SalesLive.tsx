@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type Sale = {
   id: string;
   amount: number;
+  gross_amount: number | null;
   currency: string;
   buyer_ref: string | null;
   received_at: string;
@@ -29,6 +30,11 @@ export function SalesLive({
   // ren remount med nytt initialSales istället för att vi synkroniserar
   // props → state i en effekt (se https://react.dev/learn/you-might-not-need-an-effect).
   const [sales, setSales] = useState<Sale[]>(initialSales);
+  // Dropfans egen dashboard visar Gross (vad köparen betalade) som standard
+  // — matchar vi det som default blir det direkt jämförbart mot en
+  // skärmdump därifrån. Net (efter Dropfans avgift) är det som faktiskt
+  // landar som intäkt i Ekonomi, så den går att växla till också.
+  const [mode, setMode] = useState<"gross" | "net">("gross");
 
   useEffect(() => {
     const channel = supabase
@@ -47,12 +53,24 @@ export function SalesLive({
     };
   }, [supabase]);
 
+  // Fallback till amount (net) om gross_amount saknas — gäller ev. äldre
+  // rader från innan gross_amount-kolumnen fanns, eller manuella poster.
+  const pickAmount = useCallback(
+    (s: Sale): number => {
+      if (mode === "gross") {
+        return s.gross_amount != null ? Number(s.gross_amount) : Number(s.amount);
+      }
+      return Number(s.amount);
+    },
+    [mode]
+  );
+
   // OBS: summerar bara USD-belopp korrekt om alla rader faktiskt är USD
   // (sant idag, eftersom Dropfans är enda källan). Om fler valutor någonsin
   // blandas in här behöver detta grupperas per valuta istället.
   const totalUsd = useMemo(
-    () => sales.reduce((s, r) => s + Number(r.amount), 0),
-    [sales]
+    () => sales.reduce((s, r) => s + pickAmount(r), 0),
+    [sales, pickAmount]
   );
   const totalSek = totalUsd * fxRate;
 
@@ -60,20 +78,45 @@ export function SalesLive({
     const map = new Map<string, number>();
     sales.forEach((s) => {
       const name = s.models?.name || "Okänd";
-      map.set(name, (map.get(name) ?? 0) + Number(s.amount) * fxRate);
+      map.set(name, (map.get(name) ?? 0) + pickAmount(s) * fxRate);
     });
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  }, [sales, fxRate]);
+  }, [sales, fxRate, pickAmount]);
 
   const maxModelAmount = byModel[0]?.[1] ?? 0;
 
   return (
     <div>
+      <div className="flex items-center justify-end mb-3">
+        <div className="flex items-center gap-1 rounded-lg bg-white/[0.03] border border-white/[0.06] p-1">
+          <button
+            onClick={() => setMode("gross")}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+              mode === "gross"
+                ? "bg-indigo-500 text-white"
+                : "text-neutral-400 hover:text-white"
+            }`}
+          >
+            Gross
+          </button>
+          <button
+            onClick={() => setMode("net")}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+              mode === "net"
+                ? "bg-indigo-500 text-white"
+                : "text-neutral-400 hover:text-white"
+            }`}
+          >
+            Net
+          </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
         <div className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-indigo-500/[0.08] to-transparent p-5">
           <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-indigo-500/10 blur-2xl" />
           <p className="text-neutral-400 text-xs mb-1.5 font-medium uppercase tracking-wide">
-            Totalt · {rangeLabel.toLowerCase()}
+            Totalt ({mode === "gross" ? "Gross" : "Net"}) · {rangeLabel.toLowerCase()}
           </p>
           <p className="text-3xl font-semibold text-white tracking-tight">
             {totalSek.toLocaleString("sv-SE", {
@@ -86,8 +129,10 @@ export function SalesLive({
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             })}{" "}
-            USD (kurs {fxRate.toFixed(4)}) — jämförbart med Ekonomi-sidans
-            summa för samma period
+            USD (kurs {fxRate.toFixed(4)}){" "}
+            {mode === "gross"
+              ? "— samma vy som Dropfans standardvy"
+              : "— jämförbart med Ekonomi-sidans summa för samma period"}
           </p>
         </div>
         <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
@@ -146,7 +191,7 @@ export function SalesLive({
             </div>
             <p className="text-emerald-400 text-sm font-medium">
               +
-              {(Number(s.amount) * fxRate).toLocaleString("sv-SE", {
+              {(pickAmount(s) * fxRate).toLocaleString("sv-SE", {
                 maximumFractionDigits: 0,
               })}{" "}
               kr

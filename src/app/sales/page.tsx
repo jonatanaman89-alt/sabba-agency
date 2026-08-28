@@ -20,7 +20,7 @@ export default async function SalesPage({
   const [{ data: sales }, fxRate] = await Promise.all([
     supabase
       .from("sales")
-      .select("id, amount, currency, buyer_ref, received_at, model_id, models(name)")
+      .select("id, amount, gross_amount, currency, buyer_ref, received_at, model_id, models(name)")
       .gte("received_at", range.fromISO)
       .lt("received_at", range.toExclusiveISO)
       .order("received_at", { ascending: false })
@@ -42,8 +42,10 @@ export default async function SalesPage({
         <a href="/settings/integrations" className="text-indigo-400 hover:text-indigo-300">
           Integrationer
         </a>
-        . Beloppen nedan är omräknade till SEK (Dropfans egen valuta är USD)
-        — samma period som Ekonomi-sidan, så de går att jämföra rakt av.
+        . Visar Gross (vad köparen betalade — samma som Dropfans standardvy)
+        med möjlighet att växla till Net (efter Dropfans avgift, det som
+        faktiskt landar i Ekonomi). Beloppen är omräknade till SEK (Dropfans
+        egen valuta är USD).
       </p>
       <SalesLive
         key={`${range.fromDate}_${range.toDate}`}
