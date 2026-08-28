@@ -1,4 +1,4 @@
-import { Sidebar } from "@/components/Sidebar";
+import { TopNav } from "@/components/TopNav";
 import type { Profile } from "@/lib/getProfile";
 
 export function AppShell({
@@ -9,9 +9,9 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen flex bg-neutral-950">
-      <Sidebar profile={profile} />
-      <main className="flex-1 px-8 py-8 max-w-6xl">{children}</main>
+    <div className="min-h-screen bg-neutral-950">
+      <TopNav profile={profile} />
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">{children}</main>
     </div>
   );
 }
