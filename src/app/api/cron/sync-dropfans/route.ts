@@ -14,9 +14,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Hur långt tillbaka vi hämtar varje gång. Dropfans earnings-endpointen
-// returnerar bara de 50 senaste transaktionerna totalt (ingen paginering),
-// så ett kort fönster + tätt schema är bättre än ett brett fönster mer sällan.
-const SYNC_WINDOW_DAYS = 3;
+// returnerar bara de 50 senaste transaktionerna totalt inom fönstret (ingen
+// paginering), så ett kort fönster + tätt schema (var 10:e minut, se
+// vercel.json — kräver Vercel Pro) är bättre än ett brett fönster mer
+// sällan: risken att missa transaktioner p.g.a. 50-taket minskar drastiskt
+// när fönstret är kort och körs ofta. 1 dag är gott och väl med marginal
+// även för en modell med många dagliga sälj.
+const SYNC_WINDOW_DAYS = 1;
 
 export async function GET(req: NextRequest) {
   const providedSecret =
