@@ -31,6 +31,14 @@ async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKe
 // Fast salt (offentlig, ok att vara statisk för detta ändamål) + huvudnyckel = per-org-nyckel.
 const STATIC_SALT = new TextEncoder().encode("sabba-vault-v1");
 
+// Konton-sidan är numera helt öppen för alla inloggade i ledningsgruppen —
+// ingen mänsklig huvudnyckel matas längre in. Nyckeln nedan är bara till för
+// att återanvända samma krypterings-API (databasen ska aldrig innehålla
+// klartext), inte som en hemlighet i sig. Skydd mot obehöriga sköts av
+// inloggningen (Supabase Auth) och RLS-policyerna, inte av den här strängen.
+export const FIXED_VAULT_PASSPHRASE =
+  "sabba-fixed-vault-key-7AR860YhdiYJqbu0U1TqU8y9IwX833cvZ8hY9w7eU";
+
 export async function encryptSecret(
   plaintext: string,
   passphrase: string

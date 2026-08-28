@@ -2,6 +2,7 @@ import { requireProfile, canSeeFinanceAndVault } from "@/lib/getProfile";
 import { AppShell } from "@/components/AppShell";
 import { createClient } from "@/lib/supabase/server";
 import { VaultClient } from "./VaultClient";
+import { MigrateOldKey } from "./MigrateOldKey";
 import { redirect } from "next/navigation";
 
 export default async function VaultPage() {
@@ -25,9 +26,14 @@ export default async function VaultPage() {
         Konton & lösenord
       </h1>
       <p className="text-neutral-400 text-sm mb-6">
-        Krypterat med en huvudnyckel som bara ledningsgruppen känner till. Nyckeln
-        skickas aldrig till servern — utan den går ingenting att läsa, inte ens från databasen.
+        Synligt direkt för alla i ledningsgruppen — ingen extra huvudnyckel
+        behövs. Krypterat i databasen, men olåst automatiskt här i appen.
       </p>
+      {/* TILLFÄLLIGT: ta bort MigrateOldKey-raden när alla poster är
+          bekräftat migrerade till den nya fasta nyckeln. */}
+      {(items ?? []).length > 0 && (
+        <MigrateOldKey items={(items ?? []) as any} />
+      )}
       <VaultClient
         initialItems={(items ?? []) as any}
         models={models ?? []}

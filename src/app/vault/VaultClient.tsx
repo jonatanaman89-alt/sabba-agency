@@ -1,9 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { encryptSecret, decryptSecret } from "@/lib/crypto/vaultCrypto";
+import {
+  encryptSecret,
+  decryptSecret,
+  FIXED_VAULT_PASSPHRASE,
+} from "@/lib/crypto/vaultCrypto";
 
 type VaultItem = {
   id: string;
@@ -26,11 +30,19 @@ export function VaultClient({
   const router = useRouter();
   const supabase = createClient();
 
-  const [passphrase, setPassphrase] = useState("");
-  const [unlocked, setUnlocked] = useState(false);
+  // Sidan är öppen för alla i ledningsgruppen — ingen mänsklig huvudnyckel
+  // matas längre in. En fast, inbyggd nyckel används istället bara för att
+  // återanvända samma krypterings-API (se vaultCrypto.ts).
+  const passphrase = FIXED_VAULT_PASSPHRASE;
   const [revealed, setRevealed] = useState<Record<string, string>>({});
   const [revealingAll, setRevealingAll] = useState(false);
   const [search, setSearch] = useState("");
+
+  // Lösenorden ska visas direkt utan extra klick.
+  useEffect(() => {
+    revealAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialItems]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -203,34 +215,6 @@ export function VaultClient({
       return;
     }
     router.refresh();
-  }
-
-  if (!unlocked) {
-    return (
-      <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-6 max-w-md">
-        <label className="block text-sm text-neutral-300 mb-2">
-          Ange huvudnyckel för valvet
-        </label>
-        <input
-          type="password"
-          value={passphrase}
-          onChange={(e) => setPassphrase(e.target.value)}
-          className="w-full rounded-lg bg-neutral-800 border border-neutral-700 px-3 py-2 text-white text-sm mb-3"
-          placeholder="Huvudnyckel"
-        />
-        <button
-          onClick={() => passphrase && setUnlocked(true)}
-          className="w-full rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm py-2 transition"
-        >
-          Lås upp
-        </button>
-        <p className="text-neutral-500 text-xs mt-3">
-          Nyckeln finns bara i din webbläsare under sessionen. Fel nyckel ger
-          bara ett felmeddelande vid uppvisning — testa gärna på en post du
-          redan vet innehållet på.
-        </p>
-      </div>
-    );
   }
 
   const anyRevealed = Object.keys(revealed).length > 0;
