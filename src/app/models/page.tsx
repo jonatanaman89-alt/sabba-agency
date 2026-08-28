@@ -1,12 +1,10 @@
-import { requireProfile, canSeeFinanceAndVault } from "@/lib/getProfile";
+import { requireProfileWithClient, canSeeFinanceAndVault } from "@/lib/getProfile";
 import { AppShell } from "@/components/AppShell";
-import { createClient } from "@/lib/supabase/server";
 import { ModelForm } from "./ModelForm";
 import { ModelRow } from "./ModelRow";
 
 export default async function ModelsPage() {
-  const profile = await requireProfile();
-  const supabase = await createClient();
+  const { profile, supabase } = await requireProfileWithClient();
   const canEdit = canSeeFinanceAndVault(profile.role);
 
   const { data: models } = await supabase
@@ -18,8 +16,10 @@ export default async function ModelsPage() {
     <AppShell profile={profile}>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Modeller</h1>
-          <p className="text-neutral-400 text-sm mt-1">
+          <h1 className="text-2xl font-semibold text-white tracking-tight">
+            Modeller
+          </h1>
+          <p className="text-neutral-500 text-sm mt-1">
             Profiler, status och intäktsandel.
           </p>
         </div>
@@ -31,7 +31,7 @@ export default async function ModelsPage() {
         </div>
       )}
 
-      <div className="rounded-xl border border-neutral-800 bg-neutral-900 divide-y divide-neutral-800">
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] divide-y divide-white/[0.06]">
         {(models ?? []).length === 0 && (
           <p className="text-neutral-500 text-sm px-5 py-6">
             Inga modeller ännu.

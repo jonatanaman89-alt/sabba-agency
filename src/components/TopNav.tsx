@@ -9,13 +9,12 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Hem", icon: "🏠", roles: ["owner", "leadership", "staff"] },
   { href: "/sales", label: "Sales", icon: "💰", roles: ["owner", "leadership"] },
   { href: "/models", label: "Modeller", icon: "👥", roles: ["owner", "leadership", "staff"] },
-  { href: "/vault", label: "Konton", icon: "🔑", lock: true, roles: ["owner", "leadership"] },
-  { href: "/finance", label: "Kassa", icon: "🏦", lock: true, roles: ["owner", "leadership"] },
+  { href: "/vault", label: "Konton", icon: "🔑", roles: ["owner", "leadership"] },
+  { href: "/finance", label: "Kassa", icon: "🏦", roles: ["owner", "leadership"] },
   {
     href: "/settings/integrations",
     label: "Inställningar",
     icon: "⚙️",
-    lock: true,
     roles: ["owner", "leadership"],
   },
 ] as const;
@@ -33,11 +32,21 @@ export function TopNav({ profile }: { profile: Profile }) {
       ? "Ledning"
       : "Personal";
 
+  const initials = profile.full_name
+    .split(" ")
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
   return (
-    <header className="sticky top-0 z-30 bg-neutral-900 border-b border-neutral-800">
+    <header className="sticky top-0 z-30 backdrop-blur-xl bg-neutral-950/70 border-b border-white/[0.06]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center h-14 gap-6">
+        <div className="flex items-center h-16 gap-6">
           <Link href="/dashboard" className="flex items-center gap-2 shrink-0">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-700 text-white text-xs font-bold shadow-lg shadow-indigo-950/50">
+              S
+            </span>
             <span className="text-white font-semibold tracking-tight">
               SABBA
             </span>
@@ -51,35 +60,38 @@ export function TopNav({ profile }: { profile: Profile }) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm transition ${
+                  className={`relative flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                     active
-                      ? "bg-indigo-600 text-white"
-                      : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+                      ? "text-white"
+                      : "text-neutral-400 hover:text-white"
                   }`}
                 >
-                  <span aria-hidden>{item.icon}</span>
-                  {item.label}
-                  {"lock" in item && item.lock && (
-                    <span aria-hidden className="text-xs opacity-70">
-                      🔒
-                    </span>
+                  {active && (
+                    <span className="absolute inset-0 rounded-lg bg-white/[0.08] ring-1 ring-white/[0.08]" />
                   )}
+                  <span className="relative flex items-center gap-1.5">
+                    <span aria-hidden className="text-[13px]">
+                      {item.icon}
+                    </span>
+                    {item.label}
+                  </span>
                 </Link>
               );
             })}
           </nav>
 
           <div className="flex items-center gap-3 shrink-0">
-            <div className="text-right hidden sm:block">
-              <p className="text-sm text-white leading-tight">
-                {profile.full_name}
-              </p>
-              <p className="text-xs text-neutral-500 leading-tight">
-                {roleLabel}
-              </p>
+            <div className="hidden sm:flex items-center gap-2.5">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.08] text-[11px] font-medium text-neutral-200">
+                {initials}
+              </span>
+              <div className="text-left leading-tight">
+                <p className="text-sm text-white">{profile.full_name}</p>
+                <p className="text-[11px] text-neutral-500">{roleLabel}</p>
+              </div>
             </div>
             <form action={signOut}>
-              <button className="rounded-lg px-3 py-1.5 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-white transition">
+              <button className="rounded-lg px-3 py-1.5 text-sm text-neutral-400 hover:bg-white/[0.06] hover:text-white transition">
                 Logga ut
               </button>
             </form>

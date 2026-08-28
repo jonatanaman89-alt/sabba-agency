@@ -1,20 +1,20 @@
-import { requireProfile, canSeeFinanceAndVault } from "@/lib/getProfile";
+import { requireProfileWithClient, canSeeFinanceAndVault } from "@/lib/getProfile";
 import { AppShell } from "@/components/AppShell";
-import { createClient } from "@/lib/supabase/server";
+import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { redirect } from "next/navigation";
 import { FinanceForms } from "./FinanceForms";
+import { resolveDateRange } from "@/lib/dateRange";
 
-function startOfMonth() {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
-}
-
-export default async function FinancePage() {
-  const profile = await requireProfile();
+export default async function FinancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string; from?: string; to?: string }>;
+}) {
+  const { profile, supabase } = await requireProfileWithClient();
   if (!canSeeFinanceAndVault(profile.role)) redirect("/dashboard");
 
-  const supabase = await createClient();
-  const monthStart = startOfMonth();
+  const params = await searchParams;
+  const range = resolveDateRange(params);
 
   const [{ data: income }, { data: expenses }, { data: models }] =
     await Promise.all([
@@ -23,12 +23,14 @@ export default async function FinancePage() {
         .select(
           "amount, occurred_at, description, model_id, source, original_amount, original_currency, fx_rate, models(name)"
         )
-        .gte("occurred_at", monthStart)
+        .gte("occurred_at", range.fromDate)
+        .lte("occurred_at", range.toDate)
         .order("occurred_at", { ascending: false }),
       supabase
         .from("expenses")
         .select("amount, category, occurred_at, description, is_recurring")
-        .gte("occurred_at", monthStart)
+        .gte("occurred_at", range.fromDate)
+        .lte("occurred_at", range.toDate)
         .order("occurred_at", { ascending: false }),
       supabase.from("models").select("id, name, revenue_split_percent"),
     ]);
@@ -39,34 +41,63 @@ export default async function FinancePage() {
     0
   );
   const margin = totalIncome - totalExpenses;
+  const marginPct = totalIncome > 0 ? (margin / totalIncome) * 100 : 0;
 
   return (
     <AppShell profile={profile}>
-      <h1 className="text-2xl font-semibold text-white mb-1">Ekonomi</h1>
-      <p className="text-neutral-400 text-sm mb-6">Denna månad</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap mb-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-white mb-1 tracking-tight">
+            Ekonomi
+          </h1>
+          <p className="text-neutral-500 text-sm">
+            {range.fromDate === range.toDate
+              ? range.fromDate
+              : `${range.fromDate} – ${range.toDate}`}
+          </p>
+        </div>
+        <DateRangeFilter activeKey={range.key} />
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
-          <p className="text-neutral-400 text-xs mb-1">Intäkter</p>
-          <p className="text-2xl font-semibold text-emerald-400">
-            {totalIncome.toLocaleString("sv-SE")} kr
+        <div className="group relative overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-emerald-500/[0.08] to-transparent p-5">
+          <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-emerald-500/10 blur-2xl" />
+          <p className="text-neutral-400 text-xs mb-1.5 font-medium uppercase tracking-wide">
+            Intäkter
+          </p>
+          <p className="text-3xl font-semibold text-emerald-400 tracking-tight">
+            {totalIncome.toLocaleString("sv-SE", { maximumFractionDigits: 0 })}{" "}
+            <span className="text-lg font-normal text-emerald-400/70">kr</span>
           </p>
         </div>
-        <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
-          <p className="text-neutral-400 text-xs mb-1">Utgifter</p>
-          <p className="text-2xl font-semibold text-red-400">
-            {totalExpenses.toLocaleString("sv-SE")} kr
+        <div className="group relative overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-red-500/[0.08] to-transparent p-5">
+          <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-red-500/10 blur-2xl" />
+          <p className="text-neutral-400 text-xs mb-1.5 font-medium uppercase tracking-wide">
+            Utgifter
+          </p>
+          <p className="text-3xl font-semibold text-red-400 tracking-tight">
+            {totalExpenses.toLocaleString("sv-SE", { maximumFractionDigits: 0 })}{" "}
+            <span className="text-lg font-normal text-red-400/70">kr</span>
           </p>
         </div>
-        <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
-          <p className="text-neutral-400 text-xs mb-1">Marginal</p>
+        <div className="group relative overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-indigo-500/[0.08] to-transparent p-5">
+          <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-indigo-500/10 blur-2xl" />
+          <p className="text-neutral-400 text-xs mb-1.5 font-medium uppercase tracking-wide">
+            Marginal
+          </p>
           <p
-            className={`text-2xl font-semibold ${
+            className={`text-3xl font-semibold tracking-tight ${
               margin >= 0 ? "text-white" : "text-red-400"
             }`}
           >
-            {margin.toLocaleString("sv-SE")} kr
+            {margin.toLocaleString("sv-SE", { maximumFractionDigits: 0 })}{" "}
+            <span className="text-lg font-normal opacity-70">kr</span>
           </p>
+          {totalIncome > 0 && (
+            <p className="text-neutral-500 text-xs mt-1">
+              {marginPct.toFixed(1)}% marginal
+            </p>
+          )}
         </div>
       </div>
 
@@ -75,9 +106,9 @@ export default async function FinancePage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
         <div>
           <h2 className="text-white text-sm font-medium mb-3">
-            Intäkter denna månad
+            Intäkter · {range.label.toLowerCase()}
           </h2>
-          <div className="rounded-xl border border-neutral-800 bg-neutral-900 divide-y divide-neutral-800">
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] divide-y divide-white/[0.06] max-h-[520px] overflow-y-auto">
             {(income ?? []).length === 0 && (
               <p className="text-neutral-500 text-sm px-5 py-4">
                 Inga intäkter registrerade.
@@ -118,9 +149,9 @@ export default async function FinancePage() {
 
         <div>
           <h2 className="text-white text-sm font-medium mb-3">
-            Utgifter denna månad
+            Utgifter · {range.label.toLowerCase()}
           </h2>
-          <div className="rounded-xl border border-neutral-800 bg-neutral-900 divide-y divide-neutral-800">
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] divide-y divide-white/[0.06] max-h-[520px] overflow-y-auto">
             {(expenses ?? []).length === 0 && (
               <p className="text-neutral-500 text-sm px-5 py-4">
                 Inga utgifter registrerade.

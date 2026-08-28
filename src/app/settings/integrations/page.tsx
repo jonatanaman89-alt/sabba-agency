@@ -1,14 +1,11 @@
-import { requireProfile, canSeeFinanceAndVault } from "@/lib/getProfile";
+import { requireProfileWithClient, canSeeFinanceAndVault } from "@/lib/getProfile";
 import { AppShell } from "@/components/AppShell";
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { IntegrationsClient } from "./IntegrationsClient";
 
 export default async function IntegrationsPage() {
-  const profile = await requireProfile();
+  const { profile, supabase } = await requireProfileWithClient();
   if (!canSeeFinanceAndVault(profile.role)) redirect("/dashboard");
-
-  const supabase = await createClient();
 
   const [{ data: models }, { data: integrations }] = await Promise.all([
     supabase.from("models").select("id, name").order("name"),

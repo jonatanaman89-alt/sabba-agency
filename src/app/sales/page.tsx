@@ -1,30 +1,28 @@
-import { requireProfile, canSeeFinanceAndVault } from "@/lib/getProfile";
+import { requireProfileWithClient, canSeeFinanceAndVault } from "@/lib/getProfile";
 import { AppShell } from "@/components/AppShell";
-import { createClient } from "@/lib/supabase/server";
+import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { redirect } from "next/navigation";
 import { SalesLive } from "./SalesLive";
 import { fetchUsdToSekRate } from "@/lib/integrations/fxRate";
+import { resolveDateRange } from "@/lib/dateRange";
 
-function startOfMonth() {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
-}
-
-export default async function SalesPage() {
-  const profile = await requireProfile();
+export default async function SalesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string; from?: string; to?: string }>;
+}) {
+  const { profile, supabase } = await requireProfileWithClient();
   if (!canSeeFinanceAndVault(profile.role)) redirect("/dashboard");
 
-  const supabase = await createClient();
-
-  // Samma tidsfönster som Ekonomi-sidan (kalendermånad) — annars går det
-  // aldrig att jämföra totalerna mellan de två sidorna på ett meningsfullt sätt.
-  const monthStart = startOfMonth();
+  const params = await searchParams;
+  const range = resolveDateRange(params);
 
   const [{ data: sales }, fxRate] = await Promise.all([
     supabase
       .from("sales")
       .select("id, amount, currency, buyer_ref, received_at, model_id, models(name)")
-      .gte("received_at", monthStart)
+      .gte("received_at", range.fromISO)
+      .lt("received_at", range.toExclusiveISO)
       .order("received_at", { ascending: false })
       .limit(500),
     fetchUsdToSekRate(),
@@ -32,7 +30,10 @@ export default async function SalesPage() {
 
   return (
     <AppShell profile={profile}>
-      <h1 className="text-2xl font-semibold text-white mb-1">Sales</h1>
+      <div className="flex items-start justify-between gap-4 flex-wrap mb-2">
+        <h1 className="text-2xl font-semibold text-white tracking-tight">Sales</h1>
+        <DateRangeFilter activeKey={range.key} />
+      </div>
       <p className="text-neutral-400 text-sm mb-6 max-w-2xl">
         Hämtas automatiskt från varje modells Dropfans-konto (drops, tips och
         prenumerationer). Dropfans har ännu inte riktiga webhooks, så datan
@@ -42,10 +43,14 @@ export default async function SalesPage() {
           Integrationer
         </a>
         . Beloppen nedan är omräknade till SEK (Dropfans egen valuta är USD)
-        — samma period som Ekonomi-sidan (denna månad), så de går att
-        jämföra rakt av.
+        — samma period som Ekonomi-sidan, så de går att jämföra rakt av.
       </p>
-      <SalesLive initialSales={(sales ?? []) as any} fxRate={fxRate} />
+      <SalesLive
+        key={`${range.fromDate}_${range.toDate}`}
+        initialSales={(sales ?? []) as any}
+        fxRate={fxRate}
+        rangeLabel={range.label}
+      />
     </AppShell>
   );
 }

@@ -102,7 +102,6 @@ export function VaultClient({
     try {
       for (const item of filtered) {
         if (!revealed[item.id]) {
-          // eslint-disable-next-line no-await-in-loop
           await reveal(item);
         }
       }
@@ -253,7 +252,7 @@ export function VaultClient({
       {formOpen && (
         <form
           onSubmit={handleSubmit}
-          className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 flex flex-wrap gap-3 items-end mb-4"
+          className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 flex flex-wrap gap-3 items-end mb-4"
         >
           <div>
             <label className="block text-xs text-neutral-400 mb-1">
@@ -329,7 +328,7 @@ export function VaultClient({
         className="w-full rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-2.5 text-sm text-white mb-4 placeholder:text-neutral-500"
       />
 
-      <div className="rounded-xl border border-neutral-800 bg-neutral-900 overflow-x-auto">
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-neutral-800 text-left">
