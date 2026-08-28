@@ -3,6 +3,12 @@ import { AppShell } from "@/components/AppShell";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SalesLive } from "./SalesLive";
+import { fetchUsdToSekRate } from "@/lib/integrations/fxRate";
+
+function startOfMonth() {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
+}
 
 export default async function SalesPage() {
   const profile = await requireProfile();
@@ -10,15 +16,19 @@ export default async function SalesPage() {
 
   const supabase = await createClient();
 
-  const since = new Date();
-  since.setDate(since.getDate() - 14);
+  // Samma tidsfönster som Ekonomi-sidan (kalendermånad) — annars går det
+  // aldrig att jämföra totalerna mellan de två sidorna på ett meningsfullt sätt.
+  const monthStart = startOfMonth();
 
-  const { data: sales } = await supabase
-    .from("sales")
-    .select("id, amount, currency, buyer_ref, received_at, model_id, models(name)")
-    .gte("received_at", since.toISOString())
-    .order("received_at", { ascending: false })
-    .limit(200);
+  const [{ data: sales }, fxRate] = await Promise.all([
+    supabase
+      .from("sales")
+      .select("id, amount, currency, buyer_ref, received_at, model_id, models(name)")
+      .gte("received_at", monthStart)
+      .order("received_at", { ascending: false })
+      .limit(500),
+    fetchUsdToSekRate(),
+  ]);
 
   return (
     <AppShell profile={profile}>
@@ -31,10 +41,11 @@ export default async function SalesPage() {
         <a href="/settings/integrations" className="text-indigo-400 hover:text-indigo-300">
           Integrationer
         </a>
-        . Så fort en ny rad landar i databasen dyker den upp här direkt, utan
-        att någon behöver ladda om sidan.
+        . Beloppen nedan är i USD (Dropfans egen valuta) med en ungefärlig
+        SEK-omräkning bredvid — samma period som Ekonomi-sidan (denna månad),
+        så de går att jämföra rakt av.
       </p>
-      <SalesLive initialSales={(sales ?? []) as any} />
+      <SalesLive initialSales={(sales ?? []) as any} fxRate={fxRate} />
     </AppShell>
   );
 }

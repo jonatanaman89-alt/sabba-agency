@@ -54,7 +54,11 @@ export default async function DashboardPage() {
               Försäljning, senaste 14 dagarna
             </p>
             <p className="text-3xl font-semibold text-white">
-              {last14.toLocaleString("sv-SE")} kr
+              {last14.toLocaleString("sv-SE", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}{" "}
+              USD
             </p>
           </Link>
         )}
