@@ -20,7 +20,9 @@ export default async function FinancePage() {
     await Promise.all([
       supabase
         .from("income")
-        .select("amount, occurred_at, description, model_id, models(name)")
+        .select(
+          "amount, occurred_at, description, model_id, source, original_amount, original_currency, fx_rate, models(name)"
+        )
         .gte("occurred_at", monthStart)
         .order("occurred_at", { ascending: false }),
       supabase
@@ -89,9 +91,21 @@ export default async function FinancePage() {
                 <div>
                   <p className="text-white text-sm">
                     {(r as any).models?.name || "Okänd modell"}
+                    {r.source === "webhook" && (
+                      <span className="ml-2 text-[10px] uppercase tracking-wide text-indigo-400 bg-indigo-950 border border-indigo-900 rounded-full px-1.5 py-0.5">
+                        Dropfans auto
+                      </span>
+                    )}
                   </p>
                   <p className="text-neutral-500 text-xs">
                     {r.occurred_at} · {r.description || "—"}
+                    {r.source === "webhook" && r.original_amount && (
+                      <>
+                        {" "}
+                        · {Number(r.original_amount).toFixed(2)}{" "}
+                        {r.original_currency} × {Number(r.fx_rate).toFixed(4)}
+                      </>
+                    )}
                   </p>
                 </div>
                 <p className="text-emerald-400 text-sm font-medium">
