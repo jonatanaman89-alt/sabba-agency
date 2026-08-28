@@ -41,9 +41,9 @@ export default async function SalesPage() {
         <a href="/settings/integrations" className="text-indigo-400 hover:text-indigo-300">
           Integrationer
         </a>
-        . Beloppen nedan är i USD (Dropfans egen valuta) med en ungefärlig
-        SEK-omräkning bredvid — samma period som Ekonomi-sidan (denna månad),
-        så de går att jämföra rakt av.
+        . Beloppen nedan är omräknade till SEK (Dropfans egen valuta är USD)
+        — samma period som Ekonomi-sidan (denna månad), så de går att
+        jämföra rakt av.
       </p>
       <SalesLive initialSales={(sales ?? []) as any} fxRate={fxRate} />
     </AppShell>

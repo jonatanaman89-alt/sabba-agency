@@ -1,6 +1,7 @@
 import { requireProfile, canSeeFinanceAndVault } from "@/lib/getProfile";
 import { AppShell } from "@/components/AppShell";
 import { createClient } from "@/lib/supabase/server";
+import { fetchUsdToSekRate } from "@/lib/integrations/fxRate";
 import Link from "next/link";
 
 export default async function DashboardPage() {
@@ -12,17 +13,18 @@ export default async function DashboardPage() {
     .select("*", { count: "exact", head: true })
     .eq("status", "active");
 
-  let last14 = 0;
+  let last14Sek = 0;
   let hasFinanceAccess = canSeeFinanceAndVault(profile.role);
 
   if (hasFinanceAccess) {
     const since = new Date();
     since.setDate(since.getDate() - 14);
-    const { data } = await supabase
-      .from("sales")
-      .select("amount")
-      .gte("received_at", since.toISOString());
-    last14 = (data ?? []).reduce((sum, r) => sum + Number(r.amount), 0);
+    const [{ data }, fxRate] = await Promise.all([
+      supabase.from("sales").select("amount").gte("received_at", since.toISOString()),
+      fetchUsdToSekRate(),
+    ]);
+    const last14Usd = (data ?? []).reduce((sum, r) => sum + Number(r.amount), 0);
+    last14Sek = last14Usd * fxRate;
   }
 
   return (
@@ -54,11 +56,10 @@ export default async function DashboardPage() {
               Försäljning, senaste 14 dagarna
             </p>
             <p className="text-3xl font-semibold text-white">
-              {last14.toLocaleString("sv-SE", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
+              {last14Sek.toLocaleString("sv-SE", {
+                maximumFractionDigits: 0,
               })}{" "}
-              USD
+              kr
             </p>
           </Link>
         )}

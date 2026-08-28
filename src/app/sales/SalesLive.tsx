@@ -53,10 +53,10 @@ export function SalesLive({
     const map = new Map<string, number>();
     sales.forEach((s) => {
       const name = s.models?.name || "Okänd";
-      map.set(name, (map.get(name) ?? 0) + Number(s.amount));
+      map.set(name, (map.get(name) ?? 0) + Number(s.amount) * fxRate);
     });
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  }, [sales]);
+  }, [sales, fxRate]);
 
   return (
     <div>
@@ -64,18 +64,17 @@ export function SalesLive({
         <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
           <p className="text-neutral-400 text-xs mb-1">Totalt, denna månad</p>
           <p className="text-3xl font-semibold text-white">
+            {totalSek.toLocaleString("sv-SE", {
+              maximumFractionDigits: 0,
+            })}{" "}
+            kr
+          </p>
+          <p className="text-neutral-500 text-xs mt-1">
             {totalUsd.toLocaleString("sv-SE", {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             })}{" "}
-            USD
-          </p>
-          <p className="text-neutral-500 text-xs mt-1">
-            ≈{" "}
-            {totalSek.toLocaleString("sv-SE", {
-              maximumFractionDigits: 0,
-            })}{" "}
-            kr (kurs {fxRate.toFixed(4)}) — jämförbart med Ekonomi-sidans
+            USD (kurs {fxRate.toFixed(4)}) — jämförbart med Ekonomi-sidans
             summa för samma månad
           </p>
         </div>
@@ -92,10 +91,9 @@ export function SalesLive({
                 <span className="text-neutral-300">{name}</span>
                 <span className="text-white font-medium">
                   {amount.toLocaleString("sv-SE", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
+                    maximumFractionDigits: 0,
                   })}{" "}
-                  USD
+                  kr
                 </span>
               </div>
             ))}
@@ -121,7 +119,11 @@ export function SalesLive({
               </p>
             </div>
             <p className="text-emerald-400 text-sm font-medium">
-              +{Number(s.amount).toLocaleString("sv-SE")} {s.currency}
+              +
+              {(Number(s.amount) * fxRate).toLocaleString("sv-SE", {
+                maximumFractionDigits: 0,
+              })}{" "}
+              kr
             </p>
           </div>
         ))}
