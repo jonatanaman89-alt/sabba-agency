@@ -16,30 +16,60 @@ export default async function FinancePage({
   const params = await searchParams;
   const range = resolveDateRange(params);
 
-  const [{ data: income }, { data: expenses }, { data: models }] =
-    await Promise.all([
-      supabase
-        .from("income")
-        .select(
-          "amount, occurred_at, description, model_id, source, original_amount, original_currency, fx_rate, models(name)"
-        )
-        .gte("occurred_at", range.fromDate)
-        .lte("occurred_at", range.toDate)
-        .order("occurred_at", { ascending: false }),
-      supabase
-        .from("expenses")
-        .select("amount, category, occurred_at, description, is_recurring")
-        .gte("occurred_at", range.fromDate)
-        .lte("occurred_at", range.toDate)
-        .order("occurred_at", { ascending: false }),
-      supabase.from("models").select("id, name, revenue_split_percent"),
-    ]);
+  // Listvyerna begränsas till 1000 rader (skydd mot att ett brett eget
+  // datumintervall drar in tusentals rader i en enda request — särskilt
+  // relevant nu när historiken är fullständigt backfyllad från Dropfans).
+  // Totalsummorna hämtas separat och UTAN limit, så de alltid stämmer även
+  // om listvyn är avkortad — annars skulle "Intäkter"-kortet tyst visa fel
+  // summa (bara de första 1000 raderna) för breda intervall.
+  const LIST_LIMIT = 1000;
 
-  const totalIncome = (income ?? []).reduce((s, r) => s + Number(r.amount), 0);
-  const totalExpenses = (expenses ?? []).reduce(
+  const [
+    { data: income },
+    { data: expenses },
+    { data: models },
+    { data: allIncomeAmounts },
+    { data: allExpenseAmounts },
+  ] = await Promise.all([
+    supabase
+      .from("income")
+      .select(
+        "amount, occurred_at, description, model_id, source, original_amount, original_currency, fx_rate, models(name)"
+      )
+      .gte("occurred_at", range.fromDate)
+      .lte("occurred_at", range.toDate)
+      .order("occurred_at", { ascending: false })
+      .limit(LIST_LIMIT),
+    supabase
+      .from("expenses")
+      .select("amount, category, occurred_at, description, is_recurring")
+      .gte("occurred_at", range.fromDate)
+      .lte("occurred_at", range.toDate)
+      .order("occurred_at", { ascending: false })
+      .limit(LIST_LIMIT),
+    supabase.from("models").select("id, name, revenue_split_percent"),
+    supabase
+      .from("income")
+      .select("amount")
+      .gte("occurred_at", range.fromDate)
+      .lte("occurred_at", range.toDate),
+    supabase
+      .from("expenses")
+      .select("amount")
+      .gte("occurred_at", range.fromDate)
+      .lte("occurred_at", range.toDate),
+  ]);
+
+  const totalIncome = (allIncomeAmounts ?? []).reduce(
     (s, r) => s + Number(r.amount),
     0
   );
+  const totalExpenses = (allExpenseAmounts ?? []).reduce(
+    (s, r) => s + Number(r.amount),
+    0
+  );
+  const listIsTruncated =
+    (income?.length ?? 0) >= LIST_LIMIT || (expenses?.length ?? 0) >= LIST_LIMIT;
   const margin = totalIncome - totalExpenses;
   const marginPct = totalIncome > 0 ? (margin / totalIncome) * 100 : 0;
 
@@ -103,6 +133,14 @@ export default async function FinancePage({
 
       <FinanceForms models={models ?? []} />
 
+      {listIsTruncated && (
+        <p className="text-amber-400/80 text-xs mt-6 -mb-2">
+          Visar de {LIST_LIMIT} senaste posterna för perioden — summorna ovan
+          räknar dock alltid med samtliga. Välj ett smalare datumintervall
+          för att se hela listan.
+        </p>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
         <div>
           <h2 className="text-white text-sm font-medium mb-3">
@@ -117,7 +155,7 @@ export default async function FinancePage({
             {(income ?? []).map((r, i) => (
               <div
                 key={i}
-                className="flex items-center justify-between px-5 py-3"
+                className="flex items-center justify-between px-5 py-3 hover:bg-white/[0.02] transition-colors"
               >
                 <div>
                   <p className="text-white text-sm">
@@ -160,7 +198,7 @@ export default async function FinancePage({
             {(expenses ?? []).map((r, i) => (
               <div
                 key={i}
-                className="flex items-center justify-between px-5 py-3"
+                className="flex items-center justify-between px-5 py-3 hover:bg-white/[0.02] transition-colors"
               >
                 <div>
                   <p className="text-white text-sm capitalize">

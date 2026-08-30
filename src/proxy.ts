@@ -25,9 +25,16 @@ export async function proxy(request: NextRequest) {
     }
   );
 
+  // getClaims() verifierar JWT:t lokalt mot ett cachat nyckelset (JWKS)
+  // istället för att ringa Supabase Auth-servern för varje request, som
+  // getUser() alltid gör. Det tar bort ett helt nätverks-round-trip från
+  // VARJE sidnavigering i hela appen — den enda anledningen till att
+  // proxy.ts behöver kolla sessionen alls är att avgöra om man ska
+  // omdirigeras, inte för att hämta profildata (det gör sidan själv).
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data,
+  } = await supabase.auth.getClaims();
+  const user = data?.claims ?? null;
 
   const isPublicPath = request.nextUrl.pathname.startsWith("/login");
   const isApiPath = request.nextUrl.pathname.startsWith("/api");

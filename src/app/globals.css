@@ -18,7 +18,7 @@ body {
   font-family: var(--font-sans);
 }
 
-/* Tunn, mjuk bakgrundstextur — ger lite "premium SaaS"-känsla utan att
+/* Tunn, mjuk bakgrundstextur — ger lite "premium SaaS"-djup utan att
    distrahera från innehållet. Fast (inte bara i AppShell) så login-sidan
    också får samma känsla. */
 html {
@@ -62,4 +62,19 @@ html {
 
 .page-enter {
   animation: fade-in 0.15s ease-out;
+}
+
+/* Synligt, temaanpassat fokusläge för tangentbordsnavigering — annars
+   försvinner tabbning helt i ett mörkt tema utan att märkas (dåligt för
+   tillgänglighet och ser oavslutat ut). Gäller bara :focus-visible så det
+   inte stör musklick. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid rgba(99, 102, 241, 0.6);
+  outline-offset: 2px;
+  border-radius: 6px;
 }

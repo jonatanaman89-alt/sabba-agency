@@ -14,12 +14,25 @@ type Sale = {
   models: { name: string } | null;
 };
 
+// Lättviktstyp för totalsumme-/topp-modeller-beräkningen — hämtas UTAN
+// radbegränsning från servern (till skillnad från `sales`, som är avkortad
+// till LIST_LIMIT rader), så de siffrorna alltid är korrekta även när
+// transaktionslistan är för lång för att visas i sin helhet.
+type SaleAmount = {
+  amount: number;
+  gross_amount: number | null;
+  model_id: string | null;
+  models: { name: string } | null;
+};
+
 export function SalesLive({
   initialSales,
+  allAmounts,
   fxRate,
   rangeLabel,
 }: {
   initialSales: Sale[];
+  allAmounts: SaleAmount[];
   fxRate: number;
   rangeLabel: string;
 }) {
@@ -30,6 +43,12 @@ export function SalesLive({
   // ren remount med nytt initialSales istället för att vi synkroniserar
   // props → state i en effekt (se https://react.dev/learn/you-might-not-need-an-effect).
   const [sales, setSales] = useState<Sale[]>(initialSales);
+  // Hålls i synk med `sales` via samma realtidsprenumeration nedan, så en
+  // ny försäljning som strömmar in live räknas med i totalen/topp-modeller
+  // direkt — inte bara i transaktionslistan. Till skillnad från `sales`
+  // trimmas denna ALDRIG till LIST_LIMIT, den är den fullständiga källan
+  // för alla summerade siffror.
+  const [amounts, setAmounts] = useState<SaleAmount[]>(allAmounts);
   // Dropfans egen dashboard visar Gross (vad köparen betalade) som standard
   // — matchar vi det som default blir det direkt jämförbart mot en
   // skärmdump därifrån. Net (efter Dropfans avgift) är det som faktiskt
@@ -43,7 +62,17 @@ export function SalesLive({
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "sales" },
         (payload) => {
-          setSales((prev) => [payload.new as Sale, ...prev]);
+          const newSale = payload.new as Sale;
+          setSales((prev) => [newSale, ...prev]);
+          setAmounts((prev) => [
+            {
+              amount: newSale.amount,
+              gross_amount: newSale.gross_amount,
+              model_id: newSale.model_id,
+              models: newSale.models,
+            },
+            ...prev,
+          ]);
         }
       )
       .subscribe();
@@ -56,7 +85,7 @@ export function SalesLive({
   // Fallback till amount (net) om gross_amount saknas — gäller ev. äldre
   // rader från innan gross_amount-kolumnen fanns, eller manuella poster.
   const pickAmount = useCallback(
-    (s: Sale): number => {
+    (s: Sale | SaleAmount): number => {
       if (mode === "gross") {
         return s.gross_amount != null ? Number(s.gross_amount) : Number(s.amount);
       }
@@ -68,20 +97,23 @@ export function SalesLive({
   // OBS: summerar bara USD-belopp korrekt om alla rader faktiskt är USD
   // (sant idag, eftersom Dropfans är enda källan). Om fler valutor någonsin
   // blandas in här behöver detta grupperas per valuta istället.
+  // Räknas alltid från `amounts` (obegränsad), INTE `sales` (avkortad till
+  // LIST_LIMIT rader) — annars skulle totalen tyst bli fel för breda
+  // datumintervall med fler transaktioner än listgränsen.
   const totalUsd = useMemo(
-    () => sales.reduce((s, r) => s + pickAmount(r), 0),
-    [sales, pickAmount]
+    () => amounts.reduce((s, r) => s + pickAmount(r), 0),
+    [amounts, pickAmount]
   );
   const totalSek = totalUsd * fxRate;
 
   const byModel = useMemo(() => {
     const map = new Map<string, number>();
-    sales.forEach((s) => {
+    amounts.forEach((s) => {
       const name = s.models?.name || "Okänd";
       map.set(name, (map.get(name) ?? 0) + pickAmount(s) * fxRate);
     });
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  }, [sales, fxRate, pickAmount]);
+  }, [amounts, fxRate, pickAmount]);
 
   const maxModelAmount = byModel[0]?.[1] ?? 0;
 
@@ -172,9 +204,16 @@ export function SalesLive({
         </div>
       </div>
 
-      <h2 className="text-white text-sm font-medium mb-3">
-        Senaste transaktioner
-      </h2>
+      <div className="flex items-center gap-2 mb-3">
+        <h2 className="text-white text-sm font-medium">Senaste transaktioner</h2>
+        <span className="flex items-center gap-1.5 text-[11px] text-emerald-400/80">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          </span>
+          Live
+        </span>
+      </div>
       <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] divide-y divide-white/[0.06] max-h-[480px] overflow-y-auto">
         {sales.length === 0 && (
           <p className="text-neutral-500 text-sm px-5 py-6">
@@ -182,7 +221,10 @@ export function SalesLive({
           </p>
         )}
         {sales.map((s) => (
-          <div key={s.id} className="flex items-center justify-between px-5 py-3">
+          <div
+            key={s.id}
+            className="flex items-center justify-between px-5 py-3 hover:bg-white/[0.02] transition-colors"
+          >
             <div>
               <p className="text-white text-sm">{s.models?.name || "Okänd modell"}</p>
               <p className="text-neutral-500 text-xs">

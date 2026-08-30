@@ -7,24 +7,25 @@ export type Profile = {
   role: "owner" | "leadership" | "staff";
 };
 
-// OBS: proxy.ts (motsvarande middleware) har redan verifierat sessionen
-// innan denna funktion ens körs, men den kan inte skicka med resultatet till
-// Server Components — därför behöver vi fortfarande ett getUser()-anrop här.
-// Det vi KAN undvika är att göra det två gånger eller köra det i onödan
-// sekventiellt efter profile-frågan; de körs nu i en enda kedja med minimal
-// overhead (getUser() cachar internt per request hos Supabase-klienten).
+// OBS: proxy.ts har redan verifierat sessionen (med getClaims(), som
+// verifierar JWT:t lokalt utan nätverksanrop) innan denna funktion ens körs.
+// Vi använder samma getClaims()-metod här istället för getUser() — det
+// sparar ett helt nätverks-round-trip till Supabase Auth-servern på VARJE
+// sidladdning, eftersom claims.sub redan är det verifierade user-id:t vi
+// behöver för profile-frågan. getUser() (som alltid ringer Auth-servern)
+// behövs bara på ställen där vi aktivt vill ha färska user-metadata, inte
+// bara ett giltigt id.
 export async function requireProfile(): Promise<Profile> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data } = await supabase.auth.getClaims();
+  const userId = data?.claims?.sub;
 
-  if (!user) redirect("/login");
+  if (!userId) redirect("/login");
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("id, full_name, role")
-    .eq("id", user.id)
+    .eq("id", userId)
     .single();
 
   if (!profile) redirect("/login");
@@ -37,16 +38,15 @@ export async function requireProfile(): Promise<Profile> {
 // datafrågor direkt utan ett extra createClient()-steg.
 export async function requireProfileWithClient() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data } = await supabase.auth.getClaims();
+  const userId = data?.claims?.sub;
 
-  if (!user) redirect("/login");
+  if (!userId) redirect("/login");
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("id, full_name, role")
-    .eq("id", user.id)
+    .eq("id", userId)
     .single();
 
   if (!profile) redirect("/login");

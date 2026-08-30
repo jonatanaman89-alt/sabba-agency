@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react";
 import { requireProfileWithClient, canSeeFinanceAndVault } from "@/lib/getProfile";
 import { AppShell } from "@/components/AppShell";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
@@ -17,16 +18,31 @@ export default async function SalesPage({
   const params = await searchParams;
   const range = resolveDateRange(params);
 
-  const [{ data: sales }, fxRate] = await Promise.all([
+  // Listan begränsas till 500 rader (samma resonemang som Finance-sidan —
+  // ett brett eget datumintervall kan nu efter historik-backfillen ge
+  // betydligt fler rader än så). Totalsummorna beräknas ändå korrekt via
+  // en separat, obegränsad query (bara amount/gross_amount-kolumnerna,
+  // lätt att hämta), så "Totalt"-kortet aldrig tyst blir fel för breda
+  // intervall — bara transaktionslistan är avkortad.
+  const LIST_LIMIT = 500;
+
+  const [{ data: sales }, { data: allAmounts }, fxRate] = await Promise.all([
     supabase
       .from("sales")
       .select("id, amount, gross_amount, currency, buyer_ref, received_at, model_id, models(name)")
       .gte("received_at", range.fromISO)
       .lt("received_at", range.toExclusiveISO)
       .order("received_at", { ascending: false })
-      .limit(500),
+      .limit(LIST_LIMIT),
+    supabase
+      .from("sales")
+      .select("amount, gross_amount, model_id, models(name)")
+      .gte("received_at", range.fromISO)
+      .lt("received_at", range.toExclusiveISO),
     fetchUsdToSekRate(),
   ]);
+
+  const listIsTruncated = (sales?.length ?? 0) >= LIST_LIMIT;
 
   return (
     <AppShell profile={profile}>
@@ -47,9 +63,17 @@ export default async function SalesPage({
         faktiskt landar i Ekonomi). Beloppen är omräknade till SEK (Dropfans
         egen valuta är USD).
       </p>
+      {listIsTruncated && (
+        <p className="text-amber-400/80 text-xs mb-4">
+          Visar de {LIST_LIMIT} senaste transaktionerna för perioden — Totalt-
+          och Topp-modeller-korten räknar dock alltid med samtliga. Välj ett
+          smalare datumintervall för att se hela listan.
+        </p>
+      )}
       <SalesLive
         key={`${range.fromDate}_${range.toDate}`}
-        initialSales={(sales ?? []) as any}
+        initialSales={(sales ?? []) as unknown as ComponentProps<typeof SalesLive>["initialSales"]}
+        allAmounts={(allAmounts ?? []) as unknown as ComponentProps<typeof SalesLive>["allAmounts"]}
         fxRate={fxRate}
         rangeLabel={range.label}
       />
