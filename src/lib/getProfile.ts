@@ -54,6 +54,12 @@ export async function requireProfileWithClient() {
   return { profile: profile as Profile, supabase };
 }
 
+// OBS: alla inloggade användare (oavsett roll) ska se Sales, Ekonomi och
+// Konton (lösenordsvalvet) — beslutat medvetet, inte en bugg. `role`-
+// parametern behålls i signaturen så alla anropsställen (sidor och server
+// actions) förblir oförändrade om spärren någonsin ska återinföras för en
+// specifik roll igen; just nu ignoreras den helt (därav eslint-disable).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function canSeeFinanceAndVault(role: Profile["role"]) {
-  return role === "owner" || role === "leadership";
+  return true;
 }

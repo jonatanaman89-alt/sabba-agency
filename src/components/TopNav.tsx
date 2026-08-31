@@ -5,25 +5,21 @@ import { usePathname } from "next/navigation";
 import { signOut } from "@/app/actions";
 import type { Profile } from "@/lib/getProfile";
 
+// Alla inloggade användare ser samma meny oavsett roll (owner/leadership/
+// staff) — ingen roll-baserad filtrering längre, se canSeeFinanceAndVault
+// i getProfile.ts.
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Hem", icon: "🏠", roles: ["owner", "leadership", "staff"] },
-  { href: "/sales", label: "Sales", icon: "💰", roles: ["owner", "leadership"] },
-  { href: "/models", label: "Modeller", icon: "👥", roles: ["owner", "leadership", "staff"] },
-  { href: "/vault", label: "Konton", icon: "🔑", roles: ["owner", "leadership"] },
-  { href: "/finance", label: "Kassa", icon: "🏦", roles: ["owner", "leadership"] },
-  {
-    href: "/settings/integrations",
-    label: "Inställningar",
-    icon: "⚙️",
-    roles: ["owner", "leadership"],
-  },
+  { href: "/dashboard", label: "Hem", icon: "🏠" },
+  { href: "/sales", label: "Sales", icon: "💰" },
+  { href: "/models", label: "Modeller", icon: "👥" },
+  { href: "/vault", label: "Konton", icon: "🔑" },
+  { href: "/finance", label: "Kassa", icon: "🏦" },
+  { href: "/settings/integrations", label: "Inställningar", icon: "⚙️" },
 ] as const;
 
 export function TopNav({ profile }: { profile: Profile }) {
   const pathname = usePathname();
-  const items = NAV_ITEMS.filter((item) =>
-    (item.roles as readonly string[]).includes(profile.role)
-  );
+  const items = NAV_ITEMS;
 
   const roleLabel =
     profile.role === "owner"
