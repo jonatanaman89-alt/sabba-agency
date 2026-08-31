@@ -53,6 +53,19 @@ export function VaultClient({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Massimport: låter användaren klistra in en hel lista med konton på en
+  // gång, direkt i sin egen browser. Tolkning, kryptering och insert sker
+  // allt klientsidan — texten går aldrig via en server jag kontrollerar och
+  // syns aldrig för mig, bara för den som klistrar in den.
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importModelId, setImportModelId] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    saved: number;
+    skipped: number;
+  } | null>(null);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return initialItems;
@@ -203,6 +216,84 @@ export function VaultClient({
     }
   }
 
+  // Tolkar en rad som "tjänst, användarnamn, lösenord" eller
+  // "tjänst: användarnamn: lösenord" — accepterar komma, semikolon, kolon
+  // eller tab som separator, eftersom folk klistrar in listor i lite olika
+  // format. Rader utan minst tjänst + lösenord hoppas över.
+  function parseImportLine(
+    line: string
+  ): { service: string; username: string; secret: string } | null {
+    const trimmed = line.trim();
+    if (!trimmed) return null;
+    const parts = trimmed.split(/\t|,|;|:/).map((p) => p.trim()).filter(Boolean);
+    if (parts.length < 2) return null;
+    if (parts.length === 2) {
+      return { service: parts[0], username: "", secret: parts[1] };
+    }
+    const [svc, ...rest] = parts;
+    const pw = rest[rest.length - 1];
+    const user = rest.slice(0, -1).join(" ");
+    return { service: svc, username: user, secret: pw };
+  }
+
+  async function handleImport(e: React.FormEvent) {
+    e.preventDefault();
+    setImporting(true);
+    setError(null);
+    setImportResult(null);
+
+    try {
+      const lines = importText.split("\n");
+      const parsed = lines
+        .map(parseImportLine)
+        .filter((p): p is { service: string; username: string; secret: string } => p !== null);
+
+      if (parsed.length === 0) {
+        setError(
+          "Hittade inga giltiga rader. Format: tjänst, användarnamn, lösenord (en per rad)."
+        );
+        setImporting(false);
+        return;
+      }
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      let saved = 0;
+      let skipped = 0;
+
+      for (const row of parsed) {
+        try {
+          const { encrypted_secret, iv } = await encryptSecret(
+            row.secret,
+            passphrase
+          );
+          const { error: insertError } = await supabase
+            .from("vault_items")
+            .insert({
+              service_name: row.service,
+              username: row.username || null,
+              model_id: importModelId || null,
+              encrypted_secret,
+              iv,
+              created_by: user?.id,
+            });
+          if (insertError) throw insertError;
+          saved++;
+        } catch {
+          skipped++;
+        }
+      }
+
+      setImportResult({ saved, skipped });
+      setImportText("");
+      router.refresh();
+    } finally {
+      setImporting(false);
+    }
+  }
+
   async function handleDelete(item: VaultItem) {
     if (!confirm(`Ta bort "${item.service_name}"? Går inte att ångra.`)) return;
     const { error: deleteError } = await supabase
@@ -227,12 +318,24 @@ export function VaultClient({
       )}
 
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <button
-          onClick={() => (formOpen ? resetForm() : setFormOpen(true))}
-          className="rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm px-4 py-2 transition"
-        >
-          {formOpen ? "Avbryt" : "+ Nytt konto"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => (formOpen ? resetForm() : setFormOpen(true))}
+            className="rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm px-4 py-2 transition"
+          >
+            {formOpen ? "Avbryt" : "+ Nytt konto"}
+          </button>
+          <button
+            onClick={() => {
+              setImportOpen((v) => !v);
+              setImportResult(null);
+              setError(null);
+            }}
+            className="rounded-lg border border-neutral-700 hover:border-neutral-600 text-neutral-300 hover:text-white text-sm px-4 py-2 transition"
+          >
+            {importOpen ? "Avbryt import" : "📋 Importera flera"}
+          </button>
+        </div>
 
         <div className="flex items-center gap-2">
           <button
@@ -248,6 +351,64 @@ export function VaultClient({
           </button>
         </div>
       </div>
+
+      {importOpen && (
+        <form
+          onSubmit={handleImport}
+          className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 mb-4"
+        >
+          <p className="text-neutral-400 text-xs mb-3 max-w-2xl">
+            Klistra in en rad per konto, formatet{" "}
+            <span className="font-mono text-neutral-300">
+              tjänst, användarnamn, lösenord
+            </span>{" "}
+            (komma, semikolon, kolon eller tab fungerar som separator). Allt
+            tolkas, krypteras och sparas direkt här i din browser — texten
+            skickas aldrig någon annanstans.
+          </p>
+          <textarea
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+            placeholder={"Gmail, namn@gmail.com, hemligtlosenord\nOnlyFans, användare, hemligtlosenord2\n…"}
+            rows={10}
+            spellCheck={false}
+            className="w-full rounded-lg bg-neutral-800 border border-neutral-700 px-3 py-2 text-sm text-white font-mono placeholder:text-neutral-600 mb-3"
+          />
+          <div className="flex items-end gap-3 flex-wrap">
+            <div>
+              <label className="block text-xs text-neutral-400 mb-1">
+                Koppla alla till modell (valfritt)
+              </label>
+              <select
+                value={importModelId}
+                onChange={(e) => setImportModelId(e.target.value)}
+                className="rounded-lg bg-neutral-800 border border-neutral-700 px-3 py-1.5 text-sm text-white"
+              >
+                <option value="">— Ingen —</option>
+                {models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              disabled={importing || !importText.trim()}
+              className="rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm px-4 py-1.5 transition"
+            >
+              {importing ? "Krypterar & sparar…" : "Importera alla"}
+            </button>
+            {importResult && (
+              <p className="text-sm text-emerald-400">
+                {importResult.saved} sparade
+                {importResult.skipped > 0 &&
+                  `, ${importResult.skipped} hoppades över`}
+                .
+              </p>
+            )}
+          </div>
+        </form>
+      )}
 
       {formOpen && (
         <form
